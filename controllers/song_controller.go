@@ -4,6 +4,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 type SongController struct {
@@ -42,9 +44,9 @@ func NewSongController(repo repository.SongRepository, logger *logrus.Logger, ap
 // @Param skip query int false "Number of records to skip"
 // @Param limit query int false "Number of records to limit"
 // @Success 200 {object} utils.PaginatedResponse{data=[]models.Song}
-// @Failure 400 {object} gin.H{"error": "Invalid skip parameter"}
-// @Failure 400 {object} gin.H{"error": "Invalid limit parameter"}
-// @Failure 500 {object} gin.H{"error": "Internal Server Error"}
+// @Failure 400 {object} models.ErrorResponse "Invalid skip parameter"
+// @Failure 400 {object} models.ErrorResponse "Invalid limit parameter"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
 // @Router /songs [get]
 func (sc *SongController) GetSongs(c *gin.Context) {
 	group := c.Query("group")
@@ -55,14 +57,14 @@ func (sc *SongController) GetSongs(c *gin.Context) {
 	skip, err := strconv.Atoi(skipStr)
 	if err != nil {
 		sc.logger.Error("Invalid skip parameter")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid skip parameter"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid skip parameter"})
 		return
 	}
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
 		sc.logger.Error("Invalid limit parameter")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid limit parameter"})
 		return
 	}
 
@@ -77,7 +79,7 @@ func (sc *SongController) GetSongs(c *gin.Context) {
 	total, songs, err := sc.repo.GetSongs(filters, skip, limit)
 	if err != nil {
 		sc.logger.Error("Error fetching songs: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -96,28 +98,28 @@ func (sc *SongController) GetSongs(c *gin.Context) {
 // @Produce  json
 // @Param id path int true "Song ID"
 // @Success 200 {object} models.Song
-// @Failure 400 {object} gin.H{"error": "Invalid song ID"}
-// @Failure 404 {object} gin.H{"error": "Song not found"}
-// @Failure 500 {object} gin.H{"error": "Internal Server Error"}
+// @Failure 400 {object} models.ErrorResponse "Invalid song ID"
+// @Failure 404 {object} models.ErrorResponse "Song not found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
 // @Router /songs/{id} [get]
 func (sc *SongController) GetSongByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		sc.logger.Error("Invalid song ID")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song ID"})
 		return
 	}
 
 	song, err := sc.repo.GetSongByID(uint(id))
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			sc.logger.Warn("Song not found with ID: ", id)
-			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
+			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Song not found"})
 			return
 		}
 		sc.logger.Error("Error fetching song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -133,30 +135,30 @@ func (sc *SongController) GetSongByID(c *gin.Context) {
 // @Produce  json
 // @Param song body models.Song true "Song data"
 // @Success 201 {object} models.Song
-// @Failure 400 {object} gin.H{"error": "Invalid input"}
-// @Failure 400 {object} gin.H{"error": "Missing required fields"}
-// @Failure 502 {object} gin.H{"error": "External API request failed"}
-// @Failure 500 {object} gin.H{"error": "Internal Server Error"}
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 400 {object} models.ErrorResponse "Missing required fields"
+// @Failure 502 {object} models.ErrorResponse "External API request failed"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
 // @Router /songs [post]
 func (sc *SongController) CreateSong(c *gin.Context) {
 	var input models.Song
 	if err := c.ShouldBindJSON(&input); err != nil {
 		sc.logger.Error("Invalid input: ", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid input"})
 		return
 	}
 
 	// Валидация полей
 	if input.Group == "" || input.Song == "" || input.ReleaseDate.IsZero() || input.Text == "" || input.Link == "" {
 		sc.logger.Warn("Missing required fields")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required fields"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Missing required fields"})
 		return
 	}
 
 	// Создание песни
 	if err := sc.repo.CreateSong(&input); err != nil {
 		sc.logger.Error("Error creating song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -174,20 +176,20 @@ func (sc *SongController) CreateSong(c *gin.Context) {
 
 	if err != nil {
 		sc.logger.Error("External API request failed: ", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "External API request failed"})
+		c.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "External API request failed"})
 		return
 	}
 
 	if resp.StatusCode() != http.StatusOK {
 		sc.logger.Warn("External API returned non-200 status: ", resp.Status())
-		c.JSON(http.StatusBadGateway, gin.H{"error": "External API request failed"})
+		c.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "External API request failed"})
 		return
 	}
 
 	var apiResponse map[string]interface{}
 	if err := json.Unmarshal(resp.Body(), &apiResponse); err != nil {
 		sc.logger.Error("Error parsing external API response: ", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "External API response invalid"})
+		c.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "External API response invalid"})
 		return
 	}
 
@@ -208,7 +210,7 @@ func (sc *SongController) CreateSong(c *gin.Context) {
 	// Обновление записи в базе данных
 	if err := sc.repo.UpdateSong(&input); err != nil {
 		sc.logger.Error("Error updating song with enriched data: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -225,36 +227,36 @@ func (sc *SongController) CreateSong(c *gin.Context) {
 // @Param id path int true "Song ID"
 // @Param song body models.Song true "Updated song data"
 // @Success 200 {object} models.Song
-// @Failure 400 {object} gin.H{"error": "Invalid song ID"}
-// @Failure 400 {object} gin.H{"error": "Invalid input"}
-// @Failure 404 {object} gin.H{"error": "Song not found"}
-// @Failure 500 {object} gin.H{"error": "Internal Server Error"}
+// @Failure 400 {object} models.ErrorResponse "Invalid song ID"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 404 {object} models.ErrorResponse "Song not found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
 // @Router /songs/{id} [put]
 func (sc *SongController) UpdateSong(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		sc.logger.Error("Invalid song ID")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song ID"})
 		return
 	}
 
 	var input models.Song
 	if err := c.ShouldBindJSON(&input); err != nil {
 		sc.logger.Error("Invalid input: ", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid input"})
 		return
 	}
 
 	song, err := sc.repo.GetSongByID(uint(id))
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			sc.logger.Warn("Song not found with ID: ", id)
-			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
+			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Song not found"})
 			return
 		}
 		sc.logger.Error("Error fetching song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -277,7 +279,7 @@ func (sc *SongController) UpdateSong(c *gin.Context) {
 
 	if err := sc.repo.UpdateSong(song); err != nil {
 		sc.logger.Error("Error updating song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -293,34 +295,37 @@ func (sc *SongController) UpdateSong(c *gin.Context) {
 // @Produce  json
 // @Param id path int true "Song ID"
 // @Success 204 {object} nil
-// @Failure 400 {object} gin.H{"error": "Invalid song ID"}
-// @Failure 404 {object} gin.H{"error": "Song not found"}
-// @Failure 500 {object} gin.H{"error": "Internal Server Error"}
+// @Failure 400 {object} models.ErrorResponse "Invalid song ID"
+// @Failure 404 {object} models.ErrorResponse "Song not found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
 // @Router /songs/{id} [delete]
 func (sc *SongController) DeleteSong(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		sc.logger.Error("Invalid song ID")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song ID"})
 		return
 	}
 
 	song, err := sc.repo.GetSongByID(uint(id))
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			sc.logger.Warn("Song not found with ID: ", id)
-			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
+			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Song not found"})
 			return
 		}
 		sc.logger.Error("Error fetching song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
+	// Используем переменную song для логирования
+	sc.logger.Infof("Deleting song: ID=%d, Group=%s, Song=%s", song.ID, song.Group, song.Song)
+
 	if err := sc.repo.DeleteSong(uint(id)); err != nil {
 		sc.logger.Error("Error deleting song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -338,10 +343,10 @@ func (sc *SongController) DeleteSong(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param per_page query int false "Verses per page"
 // @Success 200 {object} models.Song
-// @Failure 400 {object} gin.H{"error": "Invalid song ID"}
-// @Failure 400 {object} gin.H{"error": "Page out of range"}
-// @Failure 404 {object} gin.H{"error": "Song not found"}
-// @Failure 500 {object} gin.H{"error": "Internal Server Error"}
+// @Failure 400 {object} models.ErrorResponse "Invalid song ID"
+// @Failure 400 {object} models.ErrorResponse "Page out of range"
+// @Failure 404 {object} models.ErrorResponse "Song not found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
 // @Router /songs/{id}/lyrics [get]
 func (sc *SongController) GetLyrics(c *gin.Context) {
 	idStr := c.Param("id")
@@ -351,7 +356,7 @@ func (sc *SongController) GetLyrics(c *gin.Context) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		sc.logger.Error("Invalid song ID")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song ID"})
 		return
 	}
 
@@ -366,13 +371,13 @@ func (sc *SongController) GetLyrics(c *gin.Context) {
 
 	song, err := sc.repo.GetSongByID(uint(id))
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			sc.logger.Warn("Song not found with ID: ", id)
-			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
+			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Song not found"})
 			return
 		}
 		sc.logger.Error("Error fetching song: ", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal Server Error"})
 		return
 	}
 
@@ -382,7 +387,7 @@ func (sc *SongController) GetLyrics(c *gin.Context) {
 
 	if start >= len(verses) {
 		sc.logger.Warn("Page out of range for song ID: ", id)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Page out of range"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Page out of range"})
 		return
 	}
 

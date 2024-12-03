@@ -16,8 +16,6 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	_ "github.com/blocckhaindeveloper/music_library/docs"
 )
 
 // @title Music Library API
@@ -46,12 +44,28 @@ func main() {
 		logger.Fatal("Failed to connect to database: ", err)
 	}
 
+	// Получение *sql.DB из *gorm.DB для использования с Goose
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Fatal("Failed to get sql.DB from gorm.DB: ", err)
+	}
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			logger.Error("Error closing database connection: ", err)
+		}
+	}()
+
 	// Применение миграций
 	goose.SetLogger(logger)
 	goose.SetBaseFS(nil)
 
-	goose.SetDialect("postgres")
-	if err := goose.Up(db.Migrator().DB(), "migrations"); err != nil {
+	// Установка диалекта для Goose
+	if err := goose.SetDialect("postgres"); err != nil {
+		logger.Fatal("Failed to set goose dialect: ", err)
+	}
+
+	// Применение всех миграций из директории "migrations"
+	if err := goose.Up(sqlDB, "migrations"); err != nil {
 		logger.Fatal("Failed to apply migrations: ", err)
 	}
 	logger.Info("Database migrations applied successfully")

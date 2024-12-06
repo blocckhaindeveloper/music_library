@@ -25,4 +25,4 @@ Song Library - это онлайн-библиотека песен с RESTful AP
 1. Клонируйте репозиторий:
 
    ```bash
-   git clone https://github.com/your_username/song_library.git
+   git clone https://github.com/blocckhaindeveloper/song_library.git

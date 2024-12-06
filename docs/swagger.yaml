@@ -1,0 +1,257 @@
+basePath: /
+definitions:
+  models.AddSongRequest:
+    properties:
+      group:
+        example: Muse
+        type: string
+      song:
+        example: Supermassive Black Hole
+        type: string
+    required:
+    - group
+    - song
+    type: object
+  models.Song:
+    properties:
+      createdAt:
+        type: string
+      group:
+        example: Muse
+        type: string
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      link:
+        example: https://www.youtube.com/watch?v=Xsp3_a-PMTw
+        type: string
+      releaseDate:
+        example: "2006-07-16T00:00:00Z"
+        type: string
+      song:
+        example: Supermassive Black Hole
+        type: string
+      text:
+        example: Ooh baby, don't you know I suffer?...
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  models.SongLyricsResponse:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      verses:
+        items:
+          type: string
+        type: array
+    type: object
+  models.UpdateSongRequest:
+    properties:
+      group:
+        example: Muse
+        type: string
+      song:
+        example: Uprising
+        type: string
+    type: object
+  utils.HTTPError:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API для управления онлайн-библиотекой песен
+  title: Song Library API
+  version: "1.0"
+paths:
+  /api/songs:
+    get:
+      consumes:
+      - application/json
+      description: Получить список песен с фильтрацией и пагинацией
+      parameters:
+      - description: Название группы
+        in: query
+        name: group
+        type: string
+      - description: Название песни
+        in: query
+        name: song
+        type: string
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Количество элементов на странице
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Song'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+      summary: Получить список песен
+      tags:
+      - songs
+    post:
+      consumes:
+      - application/json
+      description: Добавить новую песню в библиотеку
+      parameters:
+      - description: Данные новой песни
+        in: body
+        name: song
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddSongRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Song'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+      summary: Добавить новую песню
+      tags:
+      - songs
+  /api/songs/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Удалить песню из библиотеки по ID
+      parameters:
+      - description: ID песни
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+      summary: Удалить песню
+      tags:
+      - songs
+    put:
+      consumes:
+      - application/json
+      description: Обновить данные существующей песни по ID
+      parameters:
+      - description: ID песни
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Новые данные песни
+        in: body
+        name: song
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateSongRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Song'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+      summary: Обновить данные песни
+      tags:
+      - songs
+  /api/songs/{id}/lyrics:
+    get:
+      consumes:
+      - application/json
+      description: Получить текст песни по ID с пагинацией по куплетам
+      parameters:
+      - description: ID песни
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Количество куплетов на странице
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SongLyricsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.HTTPError'
+      summary: Получить текст песни
+      tags:
+      - songs
+swagger: "2.0"

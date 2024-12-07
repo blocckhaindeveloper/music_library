@@ -35,7 +35,7 @@ Thumbs.db
 
 
 docs/*
-!docs/docs.go # Исключаем папку, но оставляем сгенерированный файл
+!docs/docs.go 
 
 
 docker-compose.override.yml
